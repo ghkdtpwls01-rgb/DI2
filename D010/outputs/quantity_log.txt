@@ -1,0 +1,22 @@
+=== 3. quantity 값 분포 ===
+quantity
+1     23
+2     15
+3      8
+4      2
+5      1
+6      3
+7      1
+9      1
+12     1
+48     1
+
+=== 4. quantity 추출 실패(패턴 없어 기본값 1 적용) 상품명 ===
+실패 건수: 1
+ product_id                                     name  price_krw  quantity
+94894081616 장건강&면역 퓨어 비피더스유산균(30캡슐) 1개월 분, 1세트, 30회분       9900         1
+
+=== 다중 매치 확인 (검증용, 2개 이상 'N개' 패턴 발견) ===
+다중 매치 건수: 0
+
+=== 5. 저장 완료: D009/outputs/coupang_bifidus_cleaned.csv (56행, quantity/unit_price 컬럼 추가) ===
