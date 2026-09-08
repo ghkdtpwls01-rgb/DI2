@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>심장질환 진단 모델 선택 대시보드</title>
+<style>
+/* ============================================================
+   토큰 — .claude/rules/design-system.md 가 단일 출처다.
+   값을 여기서 바꾸지 말고 그 파일을 고친 뒤 옮겨 적는다.
+   ============================================================ */
+:root{
+  --page:#F4F2EF; --card:#FCFCFB; --line:#E2DFDA;
+  --ink:#17161B;  --ink2:#4A4852; --ink3:#6E6B75;
+  --s1:#2A5BD7; --s2:#0092A8; --s3:#9B3FD1; --s4:#D6337F; --s5:#B5760B;
+  --good:#157F4F; --warn:#D9730D; --bad:#C0392B;
+  --pad:20px; --gap:28px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --page:#121211; --card:#1A1A19; --line:#2E2E2C;
+    --ink:#EEECE8;  --ink2:#B5B2AC; --ink3:#8A8781;
+    --s1:#3A68DE;
+    --good:#2FA26C; --warn:#E8891F; --bad:#DC5546;
+  }
+}
+:root[data-theme="dark"]{
+  --page:#121211; --card:#1A1A19; --line:#2E2E2C;
+  --ink:#EEECE8;  --ink2:#B5B2AC; --ink3:#8A8781;
+  --s1:#3A68DE;
+  --good:#2FA26C; --warn:#E8891F; --bad:#DC5546;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);
+  font-family:"Pretendard","Apple SD Gothic Neo",system-ui,sans-serif;
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px 72px}
+
+/* ── 탭 ── */
+.method-bar{display:flex;gap:2px;padding:20px 0 0;flex-wrap:wrap}
+.method-btn{appearance:none;border:1px solid var(--line);border-bottom:none;
+  background:transparent;color:var(--ink3);font:inherit;font-size:13px;
+  padding:9px 18px;cursor:pointer}
+.method-btn.active{background:var(--card);color:var(--ink);font-weight:600}
+.method-btn:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+
+/* ── 헤더 ── */
+.dash-head{background:var(--card);border:1px solid var(--line);padding:26px var(--pad)}
+.dash-head h1{margin:0 0 6px;font-size:24px;font-weight:700;letter-spacing:-.01em}
+.dash-head .q{margin:0;color:var(--ink2);font-size:14.5px;max-width:70ch}
+.dash-meta{margin:16px 0 0;font-size:12px;color:var(--ink3);
+  font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* ── 패널 ── */
+.dash-panel{display:none}
+.dash-panel.active{display:block}
+.dash-step-hdr{display:flex;align-items:baseline;gap:12px;margin:var(--gap) 0 14px}
+.dash-step-hdr-num{font-family:ui-monospace,monospace;font-size:11px;
+  letter-spacing:.12em;color:var(--s1)}
+.dash-step-hdr-label{font-size:15px;font-weight:600}
+
+/* ── KPI ── */
+.dash-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:2px;
+  background:var(--line);border:1px solid var(--line)}
+.dk-box{background:var(--card);padding:16px var(--pad);display:flex;flex-direction:column;gap:2px}
+.dk-lbl{font-size:11.5px;color:var(--ink3);letter-spacing:.02em}
+.dk-val{font-size:24px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.dk-unit{font-size:12px;color:var(--ink3);margin-left:3px;font-weight:400}
+.dk-delta{font-size:12px;color:var(--ink2);font-family:ui-monospace,monospace;
+  font-variant-numeric:tabular-nums}
+
+/* ── 차트 카드 ── */
+.dash-charts{display:grid;grid-template-columns:1.5fr 1fr;gap:var(--gap);align-items:stretch}
+.dash-charts.three{grid-template-columns:repeat(3,1fr)}
+.dash-charts.full{grid-template-columns:1fr}
+.chart-card{background:var(--card);border:1px solid var(--line);padding:var(--pad);
+  display:flex;flex-direction:column}
+.chart-card.muted{opacity:.75}
+.cc-title{margin:0;font-size:14.5px;font-weight:700;letter-spacing:-.005em}
+.cc-desc{margin:4px 0 0;font-size:12.5px;color:var(--ink3)}
+.chart-card svg{width:100%;height:auto;margin-top:8px;display:block}
+.svg-label{font-family:ui-monospace,monospace;font-size:11px;fill:var(--ink3)}
+.svg-value{font-family:ui-monospace,monospace;font-size:11px;fill:var(--ink2)}
+.grid-line{stroke:var(--line);stroke-width:1}
+.scroll-x{overflow-x:auto}
+@media (max-width:900px){.dash-charts,.dash-charts.three{grid-template-columns:1fr}}
+
+/* ── 범례 ── */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;flex:none;border-radius:2px}
+
+/* ── 액션 ── */
+.da-item{background:var(--card);border:1px solid var(--line);padding:16px var(--pad);
+  display:grid;grid-template-columns:52px 1fr;gap:14px}
+.da-p{font-family:ui-monospace,monospace;font-size:12px;color:var(--s1);padding-top:2px}
+.da-title{margin:0 0 3px;font-size:14.5px;font-weight:600}
+.da-why{margin:0;font-size:13.5px;color:var(--ink2)}
+.da-list{display:flex;flex-direction:column;gap:2px;background:var(--line);
+  border:1px solid var(--line)}
+
+/* ── 표 ── */
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px;background:var(--card)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);
+  font-family:ui-monospace,monospace;font-weight:500;white-space:nowrap}
+td.n{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+
+/* ── 상태 ── */
+.status{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+.status svg{width:12px;height:12px;flex:none}
+.st-good{color:var(--good)} .st-warn{color:var(--warn)} .st-bad{color:var(--bad)}
+
+/* ── 경고 배너 ── */
+.warn-banner{background:var(--card);border:1px solid var(--warn);border-left-width:4px;
+  padding:14px var(--pad);margin-top:var(--gap);display:flex;gap:12px;align-items:flex-start}
+.warn-banner svg{width:18px;height:18px;flex:none;color:var(--warn);margin-top:2px}
+.warn-content{flex:1}
+.warn-content strong{display:block;margin-bottom:4px;color:var(--warn)}
+
+/* ── 툴팁 ── */
+#tip{position:absolute;z-index:50;background:var(--card);border:1px solid var(--line);
+  padding:8px 11px;font-size:12px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.12);
+  font-variant-numeric:tabular-nums;max-width:240px}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="tip" hidden></div>
+<div class="wrap">
+
+  <nav class="method-bar">
+    <button class="method-btn active" onclick="switchPanel(0,this)">모델 비교</button>
+    <button class="method-btn" onclick="switchPanel(1,this)">병원별 평가</button>
+    <button class="method-btn" onclick="switchPanel(2,this)">권장사항</button>
+    <button class="method-btn" onclick="switchPanel(3,this)">데이터</button>
+  </nav>
+
+  <header class="dash-head">
+    <h1>어느 모델을 배포할 것인가?</h1>
+    <p class="q">다국가 데이터로 정확도 80.6%를 달성했으나, Switzerland 데이터 품질 우려와 협착 분포 편향으로 특이도가 72%에 불과해 임상 신뢰도가 낮음. Cleveland+Hungarian 조합 재평가 권장.</p>
+    <p class="dash-meta">
+      5-fold CV 로지스틱 회귀 · Cleveland 14개(n=297), Cleveland 12개(n=303), 다국가 12개(n=531) · 1988-2010
+    </p>
+  </header>
+
+  <!-- ═══════════════ 패널 0 · 모델 비교 ═══════════════ -->
+  <section id="panel-0" class="dash-panel active">
+
+    <div class="dash-step-hdr">
+      <span class="dash-step-hdr-num">STEP 1</span>
+      <span class="dash-step-hdr-label">대표 지표 — 다국가 모델의 현주소</span>
+    </div>
+
+    <div class="dash-kpis">
+      <div class="dk-box">
+        <span class="dk-lbl">정확도 (다국가 12개)</span>
+        <span class="dk-val">80.60<span class="dk-unit">%</span></span>
+        <span class="dk-delta">Cleveland 12개 대비 +2.70%p</span>
+      </div>
+      <div class="dk-box">
+        <span class="dk-lbl">민감도 (협착 환자 진단율)</span>
+        <span class="dk-val">85.78<span class="dk-unit">%</span></span>
+        <span class="dk-delta">100명 중 14명 놓침</span>
+      </div>
+      <div class="dk-box">
+        <span class="dk-lbl">특이도 (정상 환자 판별률)</span>
+        <span class="dk-val">72.40<span class="dk-unit">%</span></span>
+        <span class="dk-delta" style="color:var(--warn)">⚠ 100명 중 28명 오진</span>
+      </div>
+      <div class="dk-box">
+        <span class="dk-lbl">ca/thal 제외 손실</span>
+        <span class="dk-val">5.25<span class="dk-unit">%p</span></span>
+        <span class="dk-delta">83.15% → 77.90%</span>
+      </div>
+    </div>
+
+    <div class="dash-step-hdr">
+      <span class="dash-step-hdr-num">STEP 2</span>
+      <span class="dash-step-hdr-label">세 가지 전략의 성능 비교</span>
+    </div>
+
+    <div class="dash-charts">
+      <div class="chart-card">
+        <h3 class="cc-title">Cleveland 14개가 최고지만 다국가 확장 불가능</h3>
+        <p class="cc-desc">ca/thal 결측 때문에 다국가 데이터(920명)의 58%만 사용 가능</p>
+        <!-- 그룹 막대: 3전략 × 4지표. viewBox 700×280. 막대 높이 18px, 그룹 간격 42px -->
+        <svg viewBox="0 0 700 280" role="img" aria-label="모델별 성능 비교">
+          <!-- 격자선 -->
+          <line class="grid-line" x1="96" y1="10" x2="96" y2="246"></line>
+          <line class="grid-line" x1="96" y1="246" x2="692" y2="246"></line>
+
+          <!-- 정확도 그룹 -->
+          <text class="svg-label" x="8" y="28">정확도</text>
+          <rect x="96" y="12" width="497" height="18" rx="4" fill="var(--s1)"></rect>
+          <text class="svg-value" x="600" y="27">83.15%</text>
+
+          <rect x="96" y="32" width="465" height="18" rx="4" fill="var(--s2)"></rect>
+          <text class="svg-value" x="568" y="47">77.90%</text>
+
+          <rect x="96" y="52" width="482" height="18" rx="4" fill="var(--s3)"></rect>
+          <text class="svg-value" x="585" y="67">80.60%</text>
+
+          <!-- 민감도 그룹 -->
+          <text class="svg-label" x="8" y="112">민감도</text>
+          <rect x="96" y="96" width="470" height="18" rx="4" fill="var(--s1)"></rect>
+          <text class="svg-value" x="573" y="111">78.76%</text>
+
+          <rect x="96" y="116" width="434" height="18" rx="4" fill="var(--s2)"></rect>
+          <text class="svg-value" x="537" y="131">72.67%</text>
+
+          <rect x="96" y="136" width="512" height="18" rx="4" fill="var(--s3)"></rect>
+          <text class="svg-value" x="615" y="151">85.78%</text>
+
+          <!-- 특이도 그룹 -->
+          <text class="svg-label" x="8" y="196">특이도</text>
+          <rect x="96" y="180" width="518" height="18" rx="4" fill="var(--s1)"></rect>
+          <text class="svg-value" x="621" y="195">86.88%</text>
+
+          <rect x="96" y="200" width="492" height="18" rx="4" fill="var(--s2)"></rect>
+          <text class="svg-value" x="595" y="215">82.39%</text>
+
+          <rect x="96" y="220" width="432" height="18" rx="4" fill="var(--s3)"></rect>
+          <text class="svg-value" x="535" y="235" style="fill:var(--warn)">72.40% ⚠</text>
+
+          <!-- 축 레이블 -->
+          <text class="svg-label" x="96" y="264">60%</text>
+          <text class="svg-label" x="396" y="264">80%</text>
+          <text class="svg-label" x="660" y="264">100%</text>
+        </svg>
+        <div class="legend">
+          <span><i style="background:var(--s1)"></i>Cleveland 14개 (최고, 표본 297)</span>
+          <span><i style="background:var(--s2)"></i>Cleveland 12개 (기준, 표본 303)</span>
+          <span><i style="background:var(--s3)"></i>다국가 12개 (개선 시도, 표본 531)</span>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3 class="cc-title">민감도-특이도 트레이드오프</h3>
+        <p class="cc-desc">다국가는 협착 진단에 관대, Cleveland는 보수적</p>
+        <!-- 산점도: viewBox 360×280. padL 44 padB 36 padT 10 padR 8 -->
+        <svg viewBox="0 0 360 280" role="img" aria-label="민감도-특이도 산점도">
+          <!-- 격자 -->
+          <line class="grid-line" x1="44" y1="244" x2="352" y2="244"></line>
+          <line class="grid-line" x1="44" y1="10" x2="44" y2="244"></line>
+          <line class="grid-line" x1="44" y1="127" x2="352" y2="127" stroke-dasharray="4 4"></line>
+          <line class="grid-line" x1="198" y1="10" x2="198" y2="244" stroke-dasharray="4 4"></line>
+
+          <!-- Cleveland 14개: (78.76, 86.88) → x=44+(78.76-60)/40*308=188.8, y=10+(100-86.88)/40*234=86.5 -->
+          <circle cx="189" cy="87" r="10" fill="var(--s1)" stroke="var(--card)" stroke-width="2"
+                  onmouseenter="showTip(event,'<strong>Cleveland 14개</strong><br>민감도 78.76%<br>특이도 86.88%')"
+                  onmouseleave="hideTip()"></circle>
+          <text class="svg-label" x="202" y="90">14개</text>
+
+          <!-- Cleveland 12개: (72.67, 82.39) → x=44+(72.67-60)/40*308=141.6, y=10+(100-82.39)/40*234=113.5 -->
+          <circle cx="142" cy="114" r="10" fill="var(--s2)" stroke="var(--card)" stroke-width="2"
+                  onmouseenter="showTip(event,'<strong>Cleveland 12개</strong><br>민감도 72.67%<br>특이도 82.39%')"
+                  onmouseleave="hideTip()"></circle>
+          <text class="svg-label" x="155" y="117">12개</text>
+
+          <!-- 다국가 12개: (85.78, 72.40) → x=44+(85.78-60)/40*308=242.9, y=10+(100-72.40)/40*234=171.6 -->
+          <circle cx="243" cy="172" r="10" fill="var(--s3)" stroke="var(--card)" stroke-width="2"
+                  onmouseenter="showTip(event,'<strong>다국가 12개</strong><br>민감도 85.78%<br>특이도 72.40%')"
+                  onmouseleave="hideTip()"></circle>
+          <text class="svg-label" x="256" y="175" style="fill:var(--warn)">다국가</text>
+
+          <!-- 축 레이블 -->
+          <text class="svg-label" x="8" y="14">특이도</text>
+          <text class="svg-label" x="8" y="248">60%</text>
+          <text class="svg-label" x="320" y="248">100%</text>
+          <text class="svg-label" x="44" y="266">60%</text>
+          <text class="svg-label" x="300" y="266">100%</text>
+          <text class="svg-label" x="160" y="276">민감도 →</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="warn-banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <div class="warn-content">
+        <strong>함정 경고: 특이도 72.40%의 의미</strong>
+        1,000명의 환자 중 협착이 없는 450명에 대해 이 모델은 126명(28%)을 협착 있음으로 오진합니다.
+        이는 불필요한 침습 검사와 환자 불안을 초래할 수 있습니다.
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 패널 1 · 병원별 평가 ═══════════════ -->
+  <section id="panel-1" class="dash-panel">
+    <div class="dash-step-hdr">
+      <span class="dash-step-hdr-num">STEP 3</span>
+      <span class="dash-step-hdr-label">병원별 데이터 신뢰도 평가</span>
+    </div>
+
+    <div class="dash-charts full">
+      <div class="chart-card">
+        <h3 class="cc-title">Cleveland와 Hungarian만 신뢰 가능 — Switzerland와 VA는 배제 필요</h3>
+        <p class="cc-desc">협착 비율의 극도 편차와 데이터 품질 문제가 모델 신뢰도를 저해</p>
+        <div class="scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>병원</th>
+                <th>n</th>
+                <th>협착 비율</th>
+                <th>정확도</th>
+                <th>민감도</th>
+                <th>특이도</th>
+                <th>AUROC</th>
+                <th>신뢰도</th>
+                <th>주요 문제</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Cleveland</strong></td>
+                <td class="n">303</td>
+                <td class="n">46%</td>
+                <td class="n">77.90%</td>
+                <td class="n">72.67%</td>
+                <td class="n">82.39%</td>
+                <td class="n">0.8703</td>
+                <td>
+                  <span class="status st-good">
+                    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.6 9 10 3" fill="none"
+                      stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    신뢰 가능
+                  </span>
+                </td>
+                <td>균형잡힌 분포, 결측 최소</td>
+              </tr>
+              <tr>
+                <td><strong>Hungarian</strong></td>
+                <td class="n">95</td>
+                <td class="n">36%</td>
+                <td class="n">78.95%</td>
+                <td class="n">89.67%</td>
+                <td class="n">52.00%</td>
+                <td class="n">0.8568</td>
+                <td>
+                  <span class="status st-warn">
+                    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10.5H1z" fill="none"
+                      stroke="currentColor" stroke-width="1.6"/></svg>
+                    조건부 사용
+                  </span>
+                </td>
+                <td>협착 부족(36%), 특이도 낮음</td>
+              </tr>
+              <tr>
+                <td><strong>Switzerland</strong></td>
+                <td class="n">46</td>
+                <td class="n">93%</td>
+                <td class="n" style="color:var(--bad)">평가 불가</td>
+                <td class="n">—</td>
+                <td class="n">—</td>
+                <td class="n">—</td>
+                <td>
+                  <span class="status st-bad">
+                    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3 9 9M9 3 3 9" stroke="currentColor"
+                      stroke-width="1.8" stroke-linecap="round"/></svg>
+                    신뢰 불가
+                  </span>
+                </td>
+                <td style="color:var(--bad)">극도 불균형, chol 모두 0</td>
+              </tr>
+              <tr>
+                <td><strong>Long Beach VA</strong></td>
+                <td class="n">87</td>
+                <td class="n">83%</td>
+                <td class="n">79.28%</td>
+                <td class="n">95.81%</td>
+                <td class="n" style="color:var(--bad)">0.00%</td>
+                <td class="n" style="color:var(--bad)">0.4213</td>
+                <td>
+                  <span class="status st-bad">
+                    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3 9 9M9 3 3 9" stroke="currentColor"
+                      stroke-width="1.8" stroke-linecap="round"/></svg>
+                    모델 실패
+                  </span>
+                </td>
+                <td style="color:var(--bad)">특이도 0%, 무작위 이하 AUROC</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-charts">
+      <div class="chart-card" style="border-left:4px solid var(--bad)">
+        <h3 class="cc-title">Switzerland: 데이터 품질 우려</h3>
+        <p class="cc-desc" style="margin-bottom:12px">
+          <strong>협착 비율 93%</strong> (Cleveland 46% 대비 47%p 차이)<br>
+          <strong>chol 123행 모두 0.0</strong> — 수집 실패 또는 단위 오류<br>
+          <strong>ca 결측 95.9%</strong> — 주요 지표 거의 없음<br>
+          <strong>표본 n=46</strong> — 경계선적 크기
+        </p>
+        <p class="da-why">
+          → 모든 환자가 협착 있음인 병원? 또는 선별된 고위험 환자군? 데이터 수집/기록 오류? 명확하지 않음.
+          <strong>다국가 모델에서 제외 권장.</strong>
+        </p>
+      </div>
+
+      <div class="chart-card" style="border-left:4px solid var(--bad)">
+        <h3 class="cc-title">Long Beach VA: 모델 작동 불능</h3>
+        <p class="cc-desc" style="margin-bottom:12px">
+          <strong>특이도 0.00%</strong> — 협착 없는 15명 모두 오진<br>
+          <strong>AUROC 0.42</strong> — 무작위 분류(0.5) 이하<br>
+          <strong>협착 비율 83%</strong> — 극도 불균형<br>
+          <strong>결측 다수</strong> — trestbps 28%, oldpeak 28% 등
+        </p>
+        <p class="da-why">
+          → 모델이 기본적으로 "모두 협착 있음"이라고 진단하는 모드로 작동.
+          <strong>실무 적용 절대 불가.</strong> 클래스 가중치 조정 후 재평가 필요.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 패널 2 · 권장사항 ═══════════════ -->
+  <section id="panel-2" class="dash-panel">
+    <div class="dash-step-hdr">
+      <span class="dash-step-hdr-num">STEP 4</span>
+      <span class="dash-step-hdr-label">즉시 결정 사항</span>
+    </div>
+
+    <div class="da-list">
+      <div class="da-item">
+        <span class="da-p">P1</span>
+        <div>
+          <h4 class="da-title">Switzerland 데이터 신뢰성 검증</h4>
+          <p class="da-why">
+            임상팀에 chol=0 원인 규명 요청 (수집 오류? 프로토콜 차이? 단위 변환 오류?).
+            Switzerland 협착 93% 이유 확인 (고위험 선별군 vs 다른 진단 기준?).
+            결정: Switzerland 포함 vs 제외 → 정확도 변화 재평가.
+          </p>
+        </div>
+      </div>
+      <div class="da-item">
+        <span class="da-p">P1</span>
+        <div>
+          <h4 class="da-title">Cleveland+Hungarian+VA 조합 재평가</h4>
+          <p class="da-why">
+            Switzerland 제외 후 12개 지표 모델 성능 재계산.
+            예상 정확도 79~81%, 예상 특이도 75~80% (현재 72.40%에서 개선 추정).
+            신뢰도 향상으로 배포 판단 가능해짐.
+          </p>
+        </div>
+      </div>
+      <div class="da-item">
+        <span class="da-p">P1</span>
+        <div>
+          <h4 class="da-title">Long Beach VA 모델 재진단</h4>
+          <p class="da-why">
+            클래스 가중치 조정(class_weight='balanced') 적용 후 재평가.
+            AUROC 0.42 → 0.70 이상 달성 가능 여부 확인.
+            불가능하면 VA 데이터 별도 수집 및 모델 재훈련 필요.
+          </p>
+        </div>
+      </div>
+      <div class="da-item">
+        <span class="da-p">P2</span>
+        <div>
+          <h4 class="da-title">ca/thal 복구 전략 검토</h4>
+          <p class="da-why">
+            옵션 1: 결측 보간 — age, oldpeak, thalach 등으로 ca/thal 예측 모델 구축.
+            옵션 2: 도메인 전문가 지식 활용 — 임상팀이 ca/thal 보정값 제시 가능한지 확인.
+            옵션 3: 신규 임상 데이터 수집 — Cleveland에서 ca/thal 완전 데이터 추가 수집.
+            목표: ca/thal 손실 2.55%p 회복으로 83% 정확도 달성.
+          </p>
+        </div>
+      </div>
+      <div class="da-item">
+        <span class="da-p">P2</span>
+        <div>
+          <h4 class="da-title">병원별 배포 전략 수립</h4>
+          <p class="da-why">
+            Cleveland 환자 대상: Cleveland 12개 지표 모델 (77.90%, 안정적).
+            협착 고위험 병원(VA처럼 협착 80% 이상): 다국가 모델 또는 민감도 우선 모델.
+            협착 저위험 병원(Hungarian처럼 협착 40% 이하): Cleveland+Hungarian 조합 모델 (고 특이도).
+            신규 병원: 협착 비율 파악 후 적절한 모델 선택 가이드라인 제시.
+          </p>
+        </div>
+      </div>
+      <div class="da-item">
+        <span class="da-p">P3</span>
+        <div>
+          <h4 class="da-title">외부 검증 데이터 수집 계획</h4>
+          <p class="da-why">
+            5-fold CV는 과적합 위험. 독립적인 테스트셋 (서로 다른 병원의 신규 환자) 필요.
+            각 병원별로 모델 성능 재검증 (Hold-out validation).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-step-hdr">
+      <span class="dash-step-hdr-num">주의</span>
+      <span class="dash-step-hdr-label">이 결론이 틀렸다면</span>
+    </div>
+    <div class="chart-card">
+      <h4 class="da-title" style="margin-bottom:8px">기저율 효과와 정확도의 분리</h4>
+      <p class="da-why" style="margin:0">
+        다국가 모델 80.60% 정확도 중 약 2.5%p는 "협착이 많은 데이터에 맞춤"(기저율 효과)이고,
+        약 0.2%p만 실제 모델 성능 개선입니다. Cleveland(협착 46%)에 이 모델을 적용하면 77~78% 정확도로 저하 예상.
+        반대로 Switzerland(협착 93%)에 적용하면 85% 이상으로 상승하지만 특이도는 극도로 저하됩니다.
+      </p>
+
+      <h4 class="da-title" style="margin:16px 0 8px">표본 크기와 신뢰도</h4>
+      <p class="da-why" style="margin:0">
+        다국가 통합(n=531)이 Cleveland 단독(n=303)보다 표본이 1.75배 많지만,
+        Swiss의 데이터 품질 문제와 VA의 극도 불균형 때문에 신뢰도는 오히려 낮습니다.
+        표본 크기는 필요조건이지 충분조건이 아닙니다.
+      </p>
+
+      <h4 class="da-title" style="margin:16px 0 8px">5-fold CV의 한계</h4>
+      <p class="da-why" style="margin:0">
+        현재 평가는 Hold-out test가 아니라 5-fold Cross-Validation입니다.
+        신규 환자 데이터 추가 시 성능이 보장되지 않으며,
+        특히 Switzerland/VA처럼 분포가 극도로 다른 데이터는 CV 안에서도 신뢰도가 낮습니다.
+        독립 테스트셋 검증이 필수입니다.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 패널 3 · 데이터 ═══════════════ -->
+  <section id="panel-3" class="dash-panel">
+    <div class="dash-step-hdr">
+      <span class="dash-step-hdr-num">TABLE</span>
+      <span class="dash-step-hdr-label">집계된 실제 값</span>
+    </div>
+    <div class="chart-card">
+      <p class="cc-desc" style="margin:0 0 12px">
+        표에 쓰인 지표의 계산식과 제외조건은 <code>04_kpi_summary.md</code> 에 있다.
+      </p>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>전략</th>
+              <th>n</th>
+              <th>정확도</th>
+              <th>민감도</th>
+              <th>특이도</th>
+              <th>PPV</th>
+              <th>NPV</th>
+              <th>AUROC</th>
+              <th>비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Cleveland 14개</strong> (ca, thal 포함)</td>
+              <td class="n">297</td>
+              <td class="n">83.15%</td>
+              <td class="n">78.76%</td>
+              <td class="n">86.88%</td>
+              <td class="n">83.79%</td>
+              <td class="n">83.00%</td>
+              <td class="n">0.8909</td>
+              <td>최고 성능, 다국가 불가</td>
+            </tr>
+            <tr>
+              <td><strong>Cleveland 12개</strong> (ca, thal 제외)</td>
+              <td class="n">303</td>
+              <td class="n">77.90%</td>
+              <td class="n">72.67%</td>
+              <td class="n">82.39%</td>
+              <td class="n">78.48%</td>
+              <td class="n">78.14%</td>
+              <td class="n">0.8703</td>
+              <td>현재 기준 모델</td>
+            </tr>
+            <tr>
+              <td><strong>다국가 12개</strong> (모든 병원)</td>
+              <td class="n">531</td>
+              <td class="n">80.60%</td>
+              <td class="n">85.78%</td>
+              <td class="n" style="color:var(--warn)">72.40%</td>
+              <td class="n">83.35%</td>
+              <td class="n">77.18%</td>
+              <td class="n">0.8705</td>
+              <td style="color:var(--warn)">특이도 낮음, 신뢰도 우려</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="da-title" style="margin:24px 0 8px">병원별 상세</h4>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr>
+              <th>병원</th>
+              <th>원본 n</th>
+              <th>유효 n (12개 지표)</th>
+              <th>협착 비율</th>
+              <th>정확도</th>
+              <th>민감도</th>
+              <th>특이도</th>
+              <th>AUROC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Cleveland</td>
+              <td class="n">303</td>
+              <td class="n">303</td>
+              <td class="n">46%</td>
+              <td class="n">77.90%</td>
+              <td class="n">72.67%</td>
+              <td class="n">82.39%</td>
+              <td class="n">0.8703</td>
+            </tr>
+            <tr>
+              <td>Hungarian</td>
+              <td class="n">294</td>
+              <td class="n">95</td>
+              <td class="n">36%</td>
+              <td class="n">78.95%</td>
+              <td class="n">89.67%</td>
+              <td class="n">52.00%</td>
+              <td class="n">0.8568</td>
+            </tr>
+            <tr style="color:var(--bad)">
+              <td>Switzerland</td>
+              <td class="n">123</td>
+              <td class="n">46</td>
+              <td class="n">93%</td>
+              <td class="n">평가 불가</td>
+              <td class="n">—</td>
+              <td class="n">—</td>
+              <td class="n">—</td>
+            </tr>
+            <tr style="color:var(--bad)">
+              <td>Long Beach VA</td>
+              <td class="n">200</td>
+              <td class="n">87</td>
+              <td class="n">83%</td>
+              <td class="n">79.28%</td>
+              <td class="n">95.81%</td>
+              <td class="n">0.00%</td>
+              <td class="n">0.4213</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="dash-meta" style="margin-top:14px">
+        n&lt;30 은 순위에 포함하지 않음 · Switzerland는 극도 불균형으로 평가 불가 · VA는 특이도 0%로 모델 실패
+      </p>
+    </div>
+
+    <div class="chart-card" style="margin-top:var(--gap)">
+      <h4 class="da-title" style="margin-bottom:8px">지표 정의</h4>
+      <div style="font-size:12.5px;color:var(--ink2);line-height:1.8">
+        <p style="margin:4px 0"><strong>정확도 (Accuracy):</strong> (TP + TN) / (TP + TN + FP + FN) — 전체 예측 중 올바른 예측의 비율</p>
+        <p style="margin:4px 0"><strong>민감도 (Sensitivity/Recall):</strong> TP / (TP + FN) — 협착 있는 환자 중 올바르게 진단된 비율 (협착 환자 놓침 최소화)</p>
+        <p style="margin:4px 0"><strong>특이도 (Specificity):</strong> TN / (TN + FP) — 협착 없는 환자 중 올바르게 진단된 비율 (정상인 오진 최소화)</p>
+        <p style="margin:4px 0"><strong>PPV (양성예측도):</strong> TP / (TP + FP) — 협착 있다고 진단한 경우 실제로 협착이 있을 확률</p>
+        <p style="margin:4px 0"><strong>NPV (음성예측도):</strong> TN / (TN + FN) — 협착 없다고 진단한 경우 실제로 협착이 없을 확률</p>
+        <p style="margin:4px 0"><strong>AUROC:</strong> ROC 곡선 아래 면적 (0.5=무작위, 0.85 이상=우수, 0.90 이상=매우 우수)</p>
+      </div>
+      <div style="margin-top:16px;padding:14px;background:var(--page);border-radius:4px">
+        <p style="margin:0;font-size:12px;color:var(--ink3)">
+          <strong>제외조건:</strong> Cleveland 14개는 ca/thal 결측 6행 제외(n=297).
+          Cleveland 12개는 ca/thal 의도적 제외(n=303).
+          다국가 12개는 병원별 결측 제외 후 합계(n=531).
+          Switzerland는 협착 97.8%로 5-fold CV 일부 fold에 클래스 부족.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* 탭 전환 — 이 함수 이름을 바꾸지 않는다. 새 전환 함수를 만들지 않는다. */
+function switchPanel(idx, btn){
+  document.querySelectorAll('.method-btn').forEach((b,i)=>b.classList.toggle('active', i===idx));
+  document.querySelectorAll('.dash-panel').forEach((p,i)=>p.classList.toggle('active', i===idx));
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* 툴팁 — hidden 속성으로 토글한다. style.display 를 쓰지 않는다. */
+function showTip(e, html){
+  const t = document.getElementById('tip');
+  t.innerHTML = html;
+  t.hidden = false;
+  t.style.left = (e.pageX + 12) + 'px';
+  t.style.top  = (e.pageY - 8)  + 'px';
+}
+function hideTip(){ document.getElementById('tip').hidden = true; }
+</script>
+</body>
+</html>
